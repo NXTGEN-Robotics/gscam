@@ -269,7 +269,16 @@ namespace gscam {
       // actual capture framerate of the device.
       // ROS_DEBUG("Getting data...");
 #if (GST_VERSION_MAJOR == 1)
-      GstSample* sample = gst_app_sink_pull_sample(GST_APP_SINK(sink_));
+      GstSample* sample = nullptr;
+      try
+      {
+        sample = gst_app_sink_pull_sample(GST_APP_SINK(sink_));
+      }
+      catch(const std::exception& e)
+      {
+        std::cerr << e.what() << '\n';
+      }
+
       if(!sample) {
         ROS_ERROR("Could not get gstreamer sample.");
         break;
@@ -322,8 +331,10 @@ namespace gscam {
 
       // Update header information
       sensor_msgs::CameraInfo cur_cinfo = camera_info_manager_.getCameraInfo();
-      sensor_msgs::CameraInfoPtr cinfo;
-      cinfo.reset(new sensor_msgs::CameraInfo(cur_cinfo));
+      // sensor_msgs::CameraInfoPtr cinfo;
+      // cinfo.reset(new sensor_msgs::CameraInfo(cur_cinfo));
+      sensor_msgs::CameraInfoPtr cinfo = boost::make_shared<sensor_msgs::CameraInfo>(cur_cinfo);
+
       if (use_gst_timestamps_) {
 #if (GST_VERSION_MAJOR == 1)
           cinfo->header.stamp = ros::Time(GST_TIME_AS_USECONDS(buf->pts+bt)/1e6+time_offset_);
@@ -392,7 +403,13 @@ namespace gscam {
         gst_memory_unmap(memory, &info);
         gst_memory_unref(memory);
 #endif
-        gst_buffer_unref(buf);
+        // taha: commented this out as it was causing the app to crash, the app does not own the buffer
+        // with gst_sample_get_buffer so I shouldn't unref it
+        // gst_buffer_unref(buf);
+        // taha: I added this
+        if (sample)
+          gst_sample_unref(sample);
+
       }
 
       ros::spinOnce();
