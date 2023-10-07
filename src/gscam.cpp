@@ -346,55 +346,63 @@ namespace gscam {
       }
       // ROS_INFO("Image time stamp: %.3f",cinfo->header.stamp.toSec());
       cinfo->header.frame_id = frame_id_;
-      if (image_encoding_ == "jpeg") {
-          sensor_msgs::CompressedImagePtr img(new sensor_msgs::CompressedImage());
-          img->header = cinfo->header;
-          img->format = "jpeg";
-          img->data.resize(buf_size);
-          std::copy(buf_data, (buf_data)+(buf_size),
-                  img->data.begin());
-          jpeg_pub_.publish(img);
-          cinfo_pub_.publish(cinfo);
-      } else {
-          // Complain if the returned buffer is smaller than we expect
-          const unsigned int expected_frame_size =
-              image_encoding_ == sensor_msgs::image_encodings::RGB8
-              ? width_ * height_ * 3
-              : width_ * height_;
+      try
+      {
+        if (image_encoding_ == "jpeg") {
+            sensor_msgs::CompressedImagePtr img(new sensor_msgs::CompressedImage());
+            img->header = cinfo->header;
+            img->format = "jpeg";
+            img->data.resize(buf_size);
+            std::copy(buf_data, (buf_data)+(buf_size),
+                    img->data.begin());
+            jpeg_pub_.publish(img);
+            cinfo_pub_.publish(cinfo);
+        } else {
+            // Complain if the returned buffer is smaller than we expect
+            const unsigned int expected_frame_size =
+                image_encoding_ == sensor_msgs::image_encodings::RGB8
+                ? width_ * height_ * 3
+                : width_ * height_;
 
-          if (buf_size < expected_frame_size) {
-              ROS_WARN_STREAM( "GStreamer image buffer underflow: Expected frame to be "
-                      << expected_frame_size << " bytes but got only "
-                      << (buf_size) << " bytes. (make sure frames are correctly encoded)");
-          }
+            if (buf_size < expected_frame_size) {
+                ROS_WARN_STREAM( "GStreamer image buffer underflow: Expected frame to be "
+                        << expected_frame_size << " bytes but got only "
+                        << (buf_size) << " bytes. (make sure frames are correctly encoded)");
+            }
 
-          // Construct Image message
-          sensor_msgs::ImagePtr img(new sensor_msgs::Image());
+            // Construct Image message
+            sensor_msgs::ImagePtr img(new sensor_msgs::Image());
 
-          img->header = cinfo->header;
+            img->header = cinfo->header;
 
-          // Image data and metadata
-          img->width = width_;
-          img->height = height_;
-          img->encoding = image_encoding_;
-          img->is_bigendian = false;
-          img->data.resize(expected_frame_size);
+            // Image data and metadata
+            img->width = width_;
+            img->height = height_;
+            img->encoding = image_encoding_;
+            img->is_bigendian = false;
+            img->data.resize(expected_frame_size);
 
-          // Copy only the data we received
-          // Since we're publishing shared pointers, we need to copy the image so
-          // we can free the buffer allocated by gstreamer
-          if (image_encoding_ == sensor_msgs::image_encodings::RGB8) {
-              img->step = width_ * 3;
-          } else {
-              img->step = width_;
-          }
-          std::copy(
-                  buf_data,
-                  (buf_data)+(buf_size),
-                  img->data.begin());
+            // Copy only the data we received
+            // Since we're publishing shared pointers, we need to copy the image so
+            // we can free the buffer allocated by gstreamer
+            if (image_encoding_ == sensor_msgs::image_encodings::RGB8) {
+                img->step = width_ * 3;
+            } else {
+                img->step = width_;
+            }
+            std::copy(
+                    buf_data,
+                    (buf_data)+(buf_size),
+                    img->data.begin());
 
-          // Publish the image/info
-          camera_pub_.publish(img, cinfo);
+            // Publish the image/info
+            camera_pub_.publish(img, cinfo);
+        }
+      }
+      catch(const std::exception& e)
+      {
+        ROS_ERROR("Exception in gstreamer pipeline! Cannot publish image!");
+        std::cerr << e.what() << '\n';
       }
 
       // Release the buffer
